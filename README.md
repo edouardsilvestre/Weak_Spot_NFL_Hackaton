@@ -4,7 +4,7 @@
 
 **Weak Spot transforme les données de tracking de votre adversaire en votre prochain appel de jeu.**
 
-Réglez le moment du match (down, distance, personnel), et Point Faible vous donne la réponse des deux côtés du ballon :
+Réglez le moment du match (down, distance, personnel), et Weak Spot vous donne la réponse des deux côtés du ballon :
 
 - **Mode attaque** : il affiche instantanément les tracés contre lesquels sa défense laisse le plus d'espace.
 - **Mode défense** : il vous donne la couverture qui neutralise le mieux les tracés favoris de son attaque dans cette situation précise.
