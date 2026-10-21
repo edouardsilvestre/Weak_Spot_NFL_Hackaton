@@ -7,3 +7,4 @@ $PY src/build_dataset.py
 $PY src/classify_routes.py
 $PY src/metrics.py
 $PY src/visualize.py
+$PY src/build_coach.py

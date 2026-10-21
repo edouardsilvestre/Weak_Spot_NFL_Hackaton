@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Weak Spot Coach</title>
+<script>/*__PLOTLY__*/</script>
+<style>
+:root{--bg:#0b1320;--panel:#141f36;--card:#1b2944;--line:#2b3b5c;--txt:#eef2f8;--mut:#9aa8c0;--acc:#f6c90e;--good:#2ec27e;--bad:#e5484d;--mid:#f5a524}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--txt);font-family:Inter,Helvetica,Arial,sans-serif}
+.wrap{max-width:1240px;margin:0 auto;padding:16px}
+header{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+h1{margin:0;font-size:26px;letter-spacing:.02em}h1 span{color:var(--acc)}
+.mode{display:flex;background:var(--panel);border-radius:14px;padding:5px}
+.mode button{font-size:18px;font-weight:800;letter-spacing:.06em;padding:14px 28px;border:0;border-radius:10px;background:none;color:var(--mut);cursor:pointer}
+.mode button.on{background:var(--acc);color:#111}
+.filters{background:var(--panel);border-radius:14px;padding:14px;display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}
+.f label{display:block;font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--mut);margin-bottom:6px}
+.f select{width:100%;font-size:18px;padding:11px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--txt)}
+.seg{display:flex;flex-wrap:wrap;gap:6px}.seg button{flex:1;min-width:44px;font-size:16px;font-weight:700;padding:11px 8px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--txt);cursor:pointer}
+.seg button.on{background:var(--txt);color:#111;border-color:var(--txt)}
+.call{margin:16px 0;padding:18px 22px;border-radius:14px;background:linear-gradient(90deg,#f6c90e,#f5a524);color:#111;font-size:24px;font-weight:800;line-height:1.3}
+.call small{display:block;font-size:13px;font-weight:600;opacity:.75;margin-top:4px}
+.trend{display:grid;grid-template-columns:minmax(260px,1fr) 2fr;gap:14px;margin-bottom:16px}
+@media(max-width:760px){.trend{grid-template-columns:1fr}.call{font-size:19px}}
+.box{background:var(--panel);border-radius:14px;padding:14px 16px}.box h3{margin:0 0 10px;font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--mut)}
+.mz{display:flex;height:46px;border-radius:10px;overflow:hidden;font-weight:800;font-size:17px}
+.mz div{display:flex;align-items:center;justify-content:center;white-space:nowrap;overflow:hidden}
+.covs{display:flex;gap:12px;flex-wrap:wrap}.cov{flex:1;min-width:130px;background:var(--card);border-radius:12px;padding:10px;text-align:center}
+.cov .v{font-size:26px;font-weight:800}.cov .l{font-size:14px;color:var(--mut)}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+.card{background:var(--card);border-radius:16px;padding:14px;border-top:6px solid var(--good);position:relative}
+.card .rank{position:absolute;top:10px;right:14px;font-size:34px;font-weight:900;color:rgba(255,255,255,.12)}
+.card h2{margin:4px 0 8px;font-size:26px}.big{font-size:40px;font-weight:900;line-height:1}.big small{font-size:14px;font-weight:600;color:var(--mut);margin-left:6px}
+.stats{display:flex;gap:16px;margin:10px 0;font-size:15px;flex-wrap:wrap}.stats b{font-size:18px}
+.badge{display:inline-block;font-size:12px;font-weight:800;padding:4px 9px;border-radius:999px;text-transform:uppercase;letter-spacing:.06em}
+.b-h{background:var(--good);color:#06210f}.b-m{background:var(--mid);color:#2a1a00}.b-l{background:var(--bad);color:white}
+.lvl{font-size:12px;color:var(--mut);margin-top:8px;line-height:1.4}
+svg{display:block;width:100%;height:auto}
+.section{margin:18px 0 8px;font-size:15px;text-transform:uppercase;letter-spacing:.08em;color:var(--mut)}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:var(--mut);margin-top:8px}.legend i{display:inline-block;width:22px;height:5px;border-radius:3px;margin-right:6px;vertical-align:middle}
+footer{margin:22px 0 10px;font-size:13px;color:var(--mut);line-height:1.6;border-top:1px solid var(--line);padding-top:12px}
+.hide{display:none}
+</style></head>
+<body><div class="wrap">
+<header><h1>WEAK SPOT <span>· Coach Mode</span></h1>
+<div class="mode"><button id="mAtt" class="on">ATTAQUE</button><button id="mDef">DÉFENSE</button></div></header>
+<div class="filters">
+  <div class="f"><label id="lblTeam">Défense adverse</label><select id="selTeam"></select></div>
+  <div class="f"><label>Down</label><div class="seg" id="segDown"></div></div>
+  <div class="f"><label>Distance</label><div class="seg" id="segDist"></div></div>
+  <div class="f"><label>Personnel attaque</label><div class="seg" id="segPers"></div></div>
+</div>
+<div class="call" id="call"></div>
+
+<div id="viewAtt">
+  <div class="trend">
+    <div class="box"><h3 id="ttlMz">Man vs Zone</h3><div class="mz" id="mzBar"></div><div class="lvl" id="mzN"></div></div>
+    <div class="box"><h3>Couvertures les plus jouées</h3><div class="covs" id="topCovs"></div></div>
+  </div>
+  <div class="section">Les 3 tracés à appeler</div>
+  <div class="cards" id="attCards"></div>
+  <div class="section" id="treeTtl">Tracés réels dans ce contexte</div>
+  <div class="box"><div id="tree"></div>
+    <div class="legend" id="sepLegend"></div></div>
+</div>
+
+<div id="viewDef" class="hide">
+  <div class="trend">
+    <div class="box"><h3>Receveur le plus ciblé</h3><div id="topRec" style="font-size:28px;font-weight:800"></div><div class="lvl" id="topRecN"></div></div>
+    <div class="box"><h3 id="ttlBars">Tracés les plus ciblés</h3><div id="bars"></div></div>
+  </div>
+  <div class="section">Les couvertures à appeler</div>
+  <div class="cards" id="defCards"></div>
+</div>
+
+<footer>Données : 8 premières semaines 2021, jeux de passe uniquement (NFL Big Data Bowl 2023 · tracking Next Gen Stats · PFF).
+Succès = gain ≥ 40 % de la distance au 1er down, ≥ 60 % au 2e, 100 % aux 3e et 4e. Estimations rétrécies hiérarchiquement (k=15) :
+équipe × situation → équipe → ligue × situation → ligue. Confiance : Élevée n ≥ 30 · Moyenne 10–29 · Faible &lt; 10 ciblages.
+Ce sont des tendances statistiques, pas des certitudes.</footer>
+</div>
+<script>
+const DATA = __DATA__;
+const {R, M} = DATA, N = R.d.length, K = 15;
+const st = {mode: 'att', team: 'PHI', down: '3', dist: '2', pers: 'all'};
+location.hash.slice(1).split('&').forEach(kv => { const [k, v] = kv.split('='); if (k in st && v) st[k] = decodeURIComponent(v); });
+const $ = id => document.getElementById(id);
+const pct = x => Math.round(100 * x) + ' %';
+const sgn = x => (x >= 0 ? '+' : '−') + Math.abs(x).toFixed(1).replace('.', ',');
+const shr = (sum, n, parent) => (sum + K * parent) / (n + K);
+const conf = n => n >= 30 ? ['Élevée', 'b-h'] : n >= 10 ? ['Moyenne', 'b-m'] : ['Faible', 'b-l'];
+const SEP = [[1.5, '#e5484d'], [2.5, '#f5a524'], [3.5, '#f6c90e'], [5, '#8bd450'], [99, '#2ec27e']];
+const sepCol = s => SEP.find(b => s < b[0])[1];
+const abbr = n => { const p = n.split(' '); return p.length > 1 ? p[0][0] + '.' + p.slice(1).join(' ') : n; };
+const DEEP = {'Cover-0': 0, 'Cover-1': 1, '2-Man': 2, 'Cover-2': 2, 'Cover-3': 3, 'Quarters': 4, 'Cover-6': 3, 'Red Zone': 2};
+const MAN = new Set(['Cover-0', 'Cover-1', '2-Man']);
+
+function sitLabel() {
+  const d = st.down === 'all' ? '' : st.down + (st.down === '1' ? 'er' : 'e') + ' down';
+  const t = st.dist === 'all' ? '' : M.dist[+st.dist].split(' ')[0].toLowerCase();
+  const p = st.pers === 'all' ? '' : ' · perso ' + M.persO[+st.pers];
+  const s = d && t ? `${d.replace(' down', '')} & ${t}` : d || (t ? 'distance ' + t : 'toutes situations');
+  return s + p;
+}
+const inSit = i => (st.down === 'all' || R.dn[i] === +st.down) && (st.dist === 'all' || R.db[i] === +st.dist) && (st.pers === 'all' || R.po[i] === +st.pers);
+
+// ---------- field drawing (SVG): x across the field (0-53.3), y yards past the LOS, offense going up ----------
+function field(W, H, y0, y1, inner) {
+  const X = x => (x / 53.3 * W).toFixed(1), Y = y => ((y1 - y) / (y1 - y0) * H).toFixed(1);
+  let s = `<svg viewBox="0 0 ${W} ${H}"><rect width="${W}" height="${H}" fill="#2f6b3a" rx="10"/>`;
+  for (let y = Math.ceil(y0 / 5) * 5; y <= y1; y += 5) {
+    s += `<line x1="0" x2="${W}" y1="${Y(y)}" y2="${Y(y)}" stroke="rgba(255,255,255,${y % 10 ? .25 : .5})" stroke-width="1.5"/>`;
+    if (y > 0 && y % 10 === 0 && H > 250) s += `<text x="${X(4)}" y="${Y(y)}" dy="6" fill="rgba(255,255,255,.7)" font-size="18" font-family="Georgia" font-weight="700">${y}</text>`
+      + `<text x="${X(49.3)}" y="${Y(y)}" dy="6" fill="rgba(255,255,255,.7)" font-size="18" font-family="Georgia" font-weight="700" text-anchor="end">${y}</text>`;
+  }
+  for (let y = Math.ceil(y0); y <= y1; y++) for (const hx of [23.4, 29.9])
+    s += `<line x1="${X(hx - .4)}" x2="${X(hx + .4)}" y1="${Y(y)}" y2="${Y(y)}" stroke="rgba(255,255,255,.35)"/>`;
+  s += `<line x1="0" x2="${W}" y1="${Y(0)}" y2="${Y(0)}" stroke="#4da3ff" stroke-width="3"/>`;
+  return s + inner(X, Y) + '</svg>';
+}
+function routeTemplate(r) {
+  const t = M.templates[M.routes[r]], rb = M.routes[r].startsWith('RB'), x0 = rb ? 29 : 44;
+  return field(320, 190, -8, 22, (X, Y) => {
+    const pts = t.pts.map(([lat, dep]) => `${X(x0 + lat)},${Y(t.x0 + dep)}`).join(' ');
+    const [la, de] = t.pts[t.pts.length - 1];
+    return `<polyline points="${pts}" fill="none" stroke="#f6c90e" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>`
+      + `<circle cx="${X(x0)}" cy="${Y(t.x0)}" r="6" fill="white"/><circle cx="${X(x0 + la)}" cy="${Y(t.x0 + de)}" r="5" fill="#f6c90e"/>`;
+  });
+}
+function covPicto(c) {
+  const d = DEEP[c] ?? 2, man = MAN.has(c);
+  return field(320, 170, -4, 24, (X, Y) => {
+    let s = '';
+    for (let i = 0; i < d; i++) { const x = 53.3 * (i + 1) / (d + 1); s += `<circle cx="${X(x)}" cy="${Y(18)}" r="9" fill="#e5484d" stroke="white" stroke-width="2"/>`; }
+    if (!man) for (const x of [8, 20, 33.3, 45.3]) s += `<ellipse cx="${X(x)}" cy="${Y(7)}" rx="${X(5)}" ry="13" fill="rgba(229,72,77,.25)" stroke="#e5484d"/>`;
+    else for (const x of [5, 15, 26.65, 38, 48]) s += `<line x1="${X(x)}" y1="${Y(1)}" x2="${X(x)}" y2="${Y(5)}" stroke="#e5484d" stroke-width="3"/><circle cx="${X(x)}" cy="${Y(5)}" r="6" fill="#e5484d"/>`;
+    return s + `<text x="${X(26.65)}" y="${Y(-2.2)}" fill="white" font-size="15" font-weight="700" text-anchor="middle">${man ? 'MAN' : 'ZONE'} · ${d} deep</text>`;
+  });
+}
+
+// ---------- ATTACK mode ----------
+function attack() {
+  const T = M.teams.indexOf(st.team), nR = M.routes.length;
+  const mk = () => Array.from({length: nR}, () => ({su: 0, nt: 0, ss: 0, nr: 0}));
+  const L = mk(), LS = mk(), TA = mk(), TS = mk();
+  const add = (a, i) => { a.nr++; a.ss += R.s[i] / 10; if (R.t[i]) { a.nt++; a.su += R.u[i]; } };
+  const plays = new Map(), tree = [];
+  for (let i = 0; i < N; i++) {
+    const r = R.r[i], sit = inSit(i), tm = R.d[i] === T;
+    add(L[r], i); if (sit) add(LS[r], i); if (tm) add(TA[r], i);
+    if (tm && sit) { add(TS[r], i); plays.set(R.g[i] + '-' + R.k[i], i); tree.push(i); }
+  }
+  const est = M.routes.map((name, r) => {
+    const p0 = L[r].su / L[r].nt, e1 = shr(LS[r].su, LS[r].nt, p0), e2 = shr(TA[r].su, TA[r].nt, e1), e3 = shr(TS[r].su, TS[r].nt, e2);
+    const s0 = L[r].ss / L[r].nr, s1 = shr(LS[r].ss, LS[r].nr, s0), s2 = shr(TA[r].ss, TA[r].nr, s1), s3 = shr(TS[r].ss, TS[r].nr, s2);
+    return {r, name, succ: e3, lg: e1, dsep: s3 - s1, nTS: TS[r].nt, nTA: TA[r].nt, nRoutes: TS[r].nr, nLS: LS[r].nt};
+  }).filter(e => e.nLS >= 10).sort((a, b) => b.succ - a.succ);
+  const top = est.slice(0, 3);
+
+  // coverage tendency of the defense in this situation (one count per play)
+  const ct = [0, 0, 0], cv = {};
+  for (const i of plays.values()) { ct[R.ct[i]]++; const c = M.covs[R.cv[i]]; cv[c] = (cv[c] || 0) + 1; }
+  const np = plays.size, mz = ct[0] + ct[1], manP = mz ? ct[0] / mz : 0;
+  $('ttlMz').textContent = `Man vs Zone · ${st.team}`;
+  $('mzBar').innerHTML = np ? `<div style="width:${100 * manP}%;background:#e5484d">${manP > .15 ? 'MAN ' + pct(manP) : ''}</div>`
+    + `<div style="width:${100 * (1 - manP)}%;background:#4da3ff;color:#06182e">${1 - manP > .15 ? 'ZONE ' + pct(1 - manP) : ''}</div>` : '<div style="width:100%;background:#333">pas de jeu</div>';
+  $('mzN').innerHTML = `${np} jeux de ${st.team} dans cette situation ${np < 10 ? '<span class="badge b-l">Faible</span>' : np < 30 ? '<span class="badge b-m">Moyenne</span>' : '<span class="badge b-h">Élevée</span>'}`;
+  const tc = Object.entries(cv).sort((a, b) => b[1] - a[1]).slice(0, 3);
+  $('topCovs').innerHTML = tc.map(([c, n]) => `<div class="cov"><div class="v">${pct(n / np)}</div><div class="l">${c}</div><div style="margin-top:6px">${covPicto(c)}</div></div>`).join('') || '<div class="lvl">Aucun jeu dans ce contexte.</div>';
+
+  const mainCov = manP >= .5 ? `Man ${pct(manP)}` : `Zone ${pct(1 - manP)}`;
+  if (top.length) {
+    const b = top[0], [cl] = conf(b.nTS);
+    $('call').innerHTML = `${sitLabel()} vs ${st.team} : appelle le ${b.name}${np ? `, ils jouent ${mainCov}` : ''}.`
+      + `<small>Succès estimé ${pct(b.succ)} (ligue ${pct(b.lg)}) · confiance ${cl.toLowerCase()} · ${b.nTS} ciblage(s) vs ${st.team} ici</small>`;
+  } else $('call').textContent = 'Pas assez de données dans ce contexte : élargissez les filtres.';
+  $('attCards').innerHTML = top.map((e, k) => {
+    const [cl, cc] = conf(e.nTS);
+    const lvl = e.nTS ? `Basé sur ${e.nTS} ciblages vs ${st.team} ici + ${e.nTA} vs ${st.team} toutes situations + tendance ligue`
+                      : `Aucun ciblage vs ${st.team} ici : basé sur ${e.nTA} ciblages vs ${st.team} + tendance ligue`;
+    const col = e.succ >= e.lg ? 'var(--good)' : 'var(--mid)';
+    return `<div class="card" style="border-top-color:${col}"><div class="rank">#${k + 1}</div><span class="badge ${cc}">Confiance ${cl}</span>
+      <h2>${e.name}</h2>${routeTemplate(e.r)}
+      <div style="margin-top:10px" class="big">${pct(e.succ)}<small>succès estimé</small></div>
+      <div class="stats"><span><b>${sgn(e.succ * 100 - e.lg * 100).replace(',0', '')} pts</b> vs ligue</span><span><b>${sgn(e.dsep)} yd</b> de séparation vs ligue</span><span><b>n=${e.nTS}</b> ciblages</span></div>
+      <div class="lvl">${lvl}.</div></div>`;
+  }).join('');
+
+  // real route tree in this context, coloured by separation
+  const step = Math.max(1, Math.ceil(tree.length / 260)), hi = new Set(top.map(e => e.r));
+  $('treeTtl').textContent = `Tracés réels contre ${st.team} · ${sitLabel()} (${tree.length} tracés${step > 1 ? ', échantillon affiché' : ''})`;
+  $('tree').innerHTML = field(1200, 640, -10, 30, (X, Y) => {
+    let lo = '', up = '';
+    for (let j = 0; j < tree.length; j += step) {
+      const i = tree[j], xy = R.xy[i]; if (!xy.length) continue;
+      let pts = ''; for (let q = 0; q < xy.length; q += 2) pts += `${X(xy[q] / 2)},${Y(xy[q + 1] / 2)} `;
+      const s = R.s[i] / 10, h = hi.has(R.r[i]);
+      const l = `<polyline points="${pts}" fill="none" stroke="${sepCol(s)}" stroke-width="${h ? 3.5 : 1.6}" opacity="${h ? .95 : .35}" stroke-linecap="round"><title>${M.routes[R.r[i]]} · ${s.toFixed(1)} yd</title></polyline>`;
+      if (h) up += l; else lo += l;
+    }
+    return lo + up;
+  });
+  $('sepLegend').innerHTML = 'Séparation à la passe : ' + ['< 1,5 yd', '1,5–2,5', '2,5–3,5', '3,5–5', '> 5 yd'].map((t, k) => `<span><i style="background:${SEP[k][1]}"></i>${t}</span>`).join('')
+    + '<span>· traits épais = les 3 tracés recommandés</span>';
+}
+
+// ---------- DEFENSE mode ----------
+function defense() {
+  const O = M.teams.indexOf(st.team), nR = M.routes.length, C = M.covs.filter(c => c !== 'Autre' && c !== 'Red Zone');
+  const tOS = new Array(nR).fill(0), tOA = new Array(nR).fill(0), rec = {}, recRoute = {};
+  const z = () => ({su: 0, nt: 0});
+  const Lc = {}, Lcr = {}, Lcrs = {}, Oc = {}, Ocs = {};
+  for (const c of C) { Lc[c] = z(); Oc[c] = z(); Ocs[c] = z(); Lcr[c] = Array.from({length: nR}, z); Lcrs[c] = Array.from({length: nR}, z); }
+  for (let i = 0; i < N; i++) {
+    if (!R.t[i]) continue;
+    const r = R.r[i], c = M.covs[R.cv[i]], sit = inSit(i), off = R.o[i] === O, u = R.u[i];
+    if (off) { tOA[r]++; if (sit) { tOS[r]++; const nm = M.names[R.p[i]]; rec[nm] = (rec[nm] || 0) + 1; recRoute[r + '|' + nm] = (recRoute[r + '|' + nm] || 0) + 1; } }
+    if (!(c in Lc)) continue;
+    Lc[c].nt++; Lc[c].su += u; Lcr[c][r].nt++; Lcr[c][r].su += u;
+    if (sit) { Lcrs[c][r].nt++; Lcrs[c][r].su += u; }
+    if (off) { Oc[c].nt++; Oc[c].su += u; if (sit) { Ocs[c].nt++; Ocs[c].su += u; } }
+  }
+  const nOS = tOS.reduce((a, b) => a + b, 0), nOA = tOA.reduce((a, b) => a + b, 0);
+  const w = tOS.map((n, r) => (n + K * tOA[r] / Math.max(nOA, 1)) / (nOS + K));   // shrunk route mix of this offense
+  const est = C.filter(c => Lc[c].nt >= 100).map(c => {
+    const pc = Lc[c].su / Lc[c].nt;
+    const base = w.reduce((acc, wr, r) => { const pcr = shr(Lcr[c][r].su, Lcr[c][r].nt, pc); return acc + wr * shr(Lcrs[c][r].su, Lcrs[c][r].nt, pcr); }, 0);
+    const e2 = shr(Oc[c].su, Oc[c].nt, base), e3 = shr(Ocs[c].su, Ocs[c].nt, e2);
+    return {c, succ: e3, base, nOS: Ocs[c].nt, nOA: Oc[c].nt};
+  }).sort((a, b) => a.succ - b.succ);
+  const top = est.slice(0, 3), avg = est.reduce((a, e) => a + e.succ, 0) / est.length;
+
+  const recTop = Object.entries(rec).sort((a, b) => b[1] - a[1])[0];
+  $('topRec').textContent = recTop ? recTop[0] : '—';
+  $('topRecN').textContent = recTop ? `${recTop[1]} ciblages sur ${nOS} de ${st.team} dans cette situation` : 'Aucun ciblage dans ce contexte';
+  const useAll = nOS < 10, counts = useAll ? tOA : tOS;
+  const ord = counts.map((n, r) => [n, r]).filter(x => x[0] > 0).sort((a, b) => a[0] - b[0]).slice(-7);
+  $('ttlBars').textContent = `Tracés les plus ciblés par ${st.team}` + (useAll ? ' (toutes situations : < 10 ciblages ici)' : '');
+  const tot = counts.reduce((a, b) => a + b, 0);
+  Plotly.react('bars', [{type: 'bar', orientation: 'h', y: ord.map(x => M.routes[x[1]]), x: ord.map(x => 100 * x[0] / tot),
+    text: ord.map(x => `${Math.round(100 * x[0] / tot)} % (n=${x[0]})`), textposition: 'outside', marker: {color: '#f6c90e'},
+    hovertemplate: '%{y} : %{text}<extra></extra>', cliponaxis: false}],
+    {paper_bgcolor: 'rgba(0,0,0,0)', plot_bgcolor: 'rgba(0,0,0,0)', font: {color: '#eef2f8', size: 15, family: 'Inter,Helvetica,Arial'},
+     margin: {l: 130, r: 90, t: 4, b: 4}, height: 250, xaxis: {visible: false}, yaxis: {automargin: true}}, {displayModeBar: false, responsive: true});
+
+  const topRoute = ord.length ? ord[ord.length - 1][1] : null;
+  let who = '';
+  if (topRoute !== null) {
+    const cand = Object.entries(recRoute).filter(([k]) => k.startsWith(topRoute + '|')).sort((a, b) => b[1] - a[1])[0];
+    who = cand ? ` de ${abbr(cand[0].split('|')[1])}` : '';
+  }
+  if (top.length) {
+    const b = top[0], [cl] = conf(b.nOS);
+    $('call').innerHTML = `vs ${st.team} ${sitLabel()} : ${b.c}${topRoute !== null ? `, attention au ${M.routes[topRoute]}${who}` : ''}.`
+      + `<small>Succès concédé estimé ${pct(b.succ)} (moyenne des couvertures ${pct(avg)}) · confiance ${cl.toLowerCase()} · ${b.nOS} ciblage(s) de ${st.team} vs ${b.c} ici</small>`;
+  }
+  $('defCards').innerHTML = top.map((e, k) => {
+    const [cl, cc] = conf(e.nOS);
+    const lvl = e.nOS ? `Basé sur ${e.nOS} ciblages de ${st.team} vs ${e.c} ici + ${e.nOA} toutes situations + tendance ligue pondérée par les tracés de ${st.team}`
+                      : `Aucun ciblage de ${st.team} vs ${e.c} ici : basé sur ${e.nOA} toutes situations + tendance ligue pondérée par les tracés de ${st.team}`;
+    return `<div class="card"><div class="rank">#${k + 1}</div><span class="badge ${cc}">Confiance ${cl}</span>
+      <h2>${e.c}</h2>${covPicto(e.c)}
+      <div style="margin-top:10px" class="big">${pct(e.succ)}<small>succès concédé estimé</small></div>
+      <div class="stats"><span><b>${sgn(100 * (e.succ - avg)).replace(',0', '')} pts</b> vs moyenne des couvertures</span><span><b>n=${e.nOS}</b> ciblages</span></div>
+      <div class="lvl">${lvl}.</div></div>`;
+  }).join('');
+}
+
+// ---------- controls ----------
+function seg(id, key, opts) {
+  $(id).innerHTML = opts.map(([v, l]) => `<button data-v="${v}" class="${st[key] === v ? 'on' : ''}">${l}</button>`).join('');
+  $(id).onclick = e => { const b = e.target.closest('button'); if (!b) return; st[key] = b.dataset.v; render(); };
+}
+function render() {
+  seg('segDown', 'down', [['all', 'Tous'], ['1', '1'], ['2', '2'], ['3', '3'], ['4', '4']]);
+  seg('segDist', 'dist', [['all', 'Tous'], ...M.dist.map((d, i) => [String(i), d.split(' ')[0]])]);
+  seg('segPers', 'pers', [['all', 'Tous'], ...M.persO.map((p, i) => [String(i), p])]);
+  $('mAtt').className = st.mode === 'att' ? 'on' : ''; $('mDef').className = st.mode === 'def' ? 'on' : '';
+  $('lblTeam').textContent = st.mode === 'att' ? 'Défense adverse' : 'Attaque adverse';
+  $('viewAtt').classList.toggle('hide', st.mode !== 'att'); $('viewDef').classList.toggle('hide', st.mode !== 'def');
+  $('selTeam').value = st.team;
+  st.mode === 'att' ? attack() : defense();
+}
+$('selTeam').innerHTML = M.teams.map(t => `<option value="${t}">${t}</option>`).join('');
+$('selTeam').onchange = e => { st.team = e.target.value; render(); };
+$('mAtt').onclick = () => { st.mode = 'att'; render(); };
+$('mDef').onclick = () => { st.mode = 'def'; render(); };
+render();
+</script>
+</body></html>
