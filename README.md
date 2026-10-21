@@ -10,6 +10,10 @@
 
 ![Man vs Zone](figures/man_vs_zone.png)
 
+Le weak spot en action : Chris Godwin sur un GO contre ATL (Cover-2), avec 3,1 yd d'espace au moment de la passe, pour un gain de 26 yards. Le HTML contient la version animée.
+
+![Jeu au moment de la passe](figures/play_at_pass.png)
+
 ## Comment lancer
 
 ```bash

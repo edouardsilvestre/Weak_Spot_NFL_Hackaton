@@ -218,6 +218,76 @@ def man_vs_zone(cov):
                      keep_best=keep.idxmax(), drop_mean=1 - keep.mean())
 
 
+# ---------- D. animated real play ----------
+def play_animation(tv, summ, team):
+    top = recommendation(team, tv).iloc[0]
+    c = summ[(summ.defensiveTeam == team) & (summ.route == top.route) & summ.targeted & (summ.passResult == "C")
+             & (summ.separation >= top.lg_sep)].sort_values("playResult", ascending=False).iloc[0]
+    trk = pd.read_csv(ROOT / "data_raw" / "data" / "tracking" / f"tracking_{c.gameId}.csv",
+                      usecols=["playId", "nflId", "frameId", "team", "playDirection", "x", "y", "jerseyNumber", "event"])
+    trk = trk[trk.playId == c.playId].copy()
+    left = trk.playDirection == "left"
+    trk.loc[left, "x"] = 120 - trk.loc[left, "x"]
+    trk.loc[left, "y"] = 53.3 - trk.loc[left, "y"]
+    snap = trk[trk.event.isin(["ball_snap", "autoevent_ballsnap"])].frameId.min()
+    pas = trk[trk.event.isin(["pass_forward", "autoevent_passforward"])].frameId.min()
+    trk = trk[trk.frameId >= snap - 5]
+    los = trk[(trk.team == "football") & (trk.frameId == snap)].x.iloc[0]
+    trk["X"], trk["Y"] = trk.y, trk.x - los   # vertical field, offense going up
+    frames_ids = sorted(trk.frameId.unique())
+    trail = trk[(trk.nflId == c.nflId)]
+
+    def frame_data(f):
+        d = trk[trk.frameId == f]
+        off = d[d.team == c.possessionTeam]
+        de = d[(d.team != c.possessionTeam) & (d.team != "football")]
+        ball = d[d.team == "football"]
+        tr = trail[trail.frameId <= f]
+        tgt = d[d.nflId == c.nflId]
+        return [
+            go.Scatter(x=tr.X, y=tr.Y, mode="lines", line=dict(color="#f6c90e", width=4), name=f"Tracé de {c.displayName}"),
+            go.Scatter(x=off.X, y=off.Y, mode="markers+text", text=off.jerseyNumber.astype("Int64").astype(str),
+                       marker=dict(size=20, color="white", line=dict(color="#111", width=1.5)),
+                       textfont=dict(size=9, color="#111"), name=f"Attaque ({c.possessionTeam})"),
+            go.Scatter(x=de.X, y=de.Y, mode="markers+text", text=de.jerseyNumber.astype("Int64").astype(str),
+                       marker=dict(size=20, color=RED, line=dict(color="white", width=1.5)),
+                       textfont=dict(size=9, color="white"), name=f"Défense ({team})"),
+            go.Scatter(x=tgt.X, y=tgt.Y, mode="markers", marker=dict(size=30, color="rgba(0,0,0,0)",
+                       line=dict(color="#f6c90e", width=3)), showlegend=False),
+            go.Scatter(x=ball.X, y=ball.Y, mode="markers", marker=dict(size=11, color="#8b4513", symbol="diamond",
+                       line=dict(color="white", width=1)), name="Ballon"),
+        ]
+
+    shapes, ann = field_shapes(-12, 40)
+    fig = go.Figure(data=frame_data(frames_ids[0]),
+                    frames=[go.Frame(data=frame_data(f), name=str(f),
+                                     layout=dict(annotations=ann + ([dict(x=26.65, y=-10, text="<b>PASSE !</b>", showarrow=False,
+                                                 font=dict(size=22, color="#f6c90e"))] if f >= pas else [])))
+                            for f in frames_ids])
+    desc = c.playDescription.split(") ", 1)[-1] if ")" in c.playDescription else c.playDescription
+    fig.update_layout(
+        title=dict(text=f"<b>Le weak spot en action : {top.route} contre {TEAMS.get(team, team)}</b><br>"
+                        f"<sup>{c.displayName} ({c.possessionTeam}) a {dec(c.separation)} yd d'espace au départ du ballon "
+                        f"(ligue sur ce tracé : {dec(top.lg_sep)} yd), {c.pff_passCoverage}. {desc}</sup>",
+                   x=0.01, font=dict(size=19)),
+        shapes=shapes, annotations=ann, font=FONT, width=1150, height=1000, plot_bgcolor="white", paper_bgcolor="white",
+        xaxis=dict(range=[-1, 62], showgrid=False, zeroline=False, showticklabels=False, fixedrange=True),
+        yaxis=dict(range=[-12.5, 40.5], showgrid=False, zeroline=False, showticklabels=False, scaleanchor="x", fixedrange=True),
+        legend=dict(orientation="h", y=-0.02, x=0.5, xanchor="center"),
+        margin=dict(l=20, r=20, t=110, b=110),
+        updatemenus=[dict(type="buttons", x=0, y=-0.08, xanchor="left", direction="left", buttons=[
+            dict(label="▶ Jouer", method="animate", args=[None, dict(frame=dict(duration=100, redraw=True), fromcurrent=True, transition=dict(duration=0))]),
+            dict(label="❚❚ Pause", method="animate", args=[[None], dict(frame=dict(duration=0, redraw=False), mode="immediate")])])],
+        sliders=[dict(active=0, x=0.2, len=0.8, y=-0.06, currentvalue=dict(prefix="t = ", suffix=" s après le snap"),
+                      steps=[dict(label=f"{(f - snap) / 10:.1f}", method="animate",
+                                  args=[[str(f)], dict(frame=dict(duration=0, redraw=True), mode="immediate")]) for f in frames_ids])],
+    )
+    still = go.Figure(fig)
+    still.update(data=frame_data(pas))
+    still.layout.updatemenus, still.layout.sliders, still.layout.height = (), (), 900
+    return fig, still
+
+
 def main():
     tv = pd.read_csv(DATA / "team_route_vuln.csv")
     cov = pd.read_csv(DATA / "coverage_route.csv")
@@ -227,6 +297,7 @@ def main():
     fa, order = heatmap(tv)
     fb, teams = scouting_card(tv, summ, routes, order)
     fc, mz = man_vs_zone(cov)
+    fd, fd_still = play_animation(tv, summ, order[-1])
 
     head = ("<!doctype html><html><head><meta charset='utf-8'><title>Weak Spot</title>"
             "<meta name='viewport' content='width=device-width, initial-scale=1'>"
@@ -241,7 +312,7 @@ def main():
              f"et on mesure l'espace entre le receveur et le défenseur le plus proche <b>au moment où le ballon part</b>. "
              f"Exemple : {sentence(worst, recommendation(worst, tv))}.</p>")
     body = [head, intro]
-    for i, f in enumerate([fa, fb, fc]):
+    for i, f in enumerate([fa, fb, fc, fd]):
         body.append("<div class='card'>" + f.to_html(full_html=False, include_plotlyjs="inline" if i == 0 else False,
                                                     config={"displaylogo": False}) + "</div>")
     body.append("</div></body></html>")
@@ -249,6 +320,7 @@ def main():
 
     fa.write_image(FIG / "weak_spot_matrix.png", scale=2)
     fc.write_image(FIG / "man_vs_zone.png", scale=2)
+    fd_still.write_image(FIG / "play_at_pass.png", scale=2)
     # static scouting card for the README: the most vulnerable defense
     fb_png = go.Figure(fb)
     idx = teams.index(worst)
