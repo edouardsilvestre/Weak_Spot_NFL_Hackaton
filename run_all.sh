@@ -8,3 +8,4 @@ $PY src/classify_routes.py
 $PY src/metrics.py
 $PY src/visualize.py
 $PY src/build_coach.py
+$PY src/make_video.py
