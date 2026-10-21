@@ -1,4 +1,5 @@
 """Weak Spot visuals: heatmap, per-team scouting card on a drawn field, man vs zone bars."""
+import json
 from pathlib import Path
 
 import numpy as np
@@ -21,6 +22,9 @@ TEAMS = {"ARI": "Arizona Cardinals", "ATL": "Atlanta Falcons", "BAL": "Baltimore
          "SF": "San Francisco 49ers", "TB": "Tampa Bay Buccaneers", "TEN": "Tennessee Titans", "WAS": "Washington"}
 FONT = dict(family="Inter, Helvetica, Arial, sans-serif", size=13, color="#1f2430")
 RED, BLUE = "#c8102e", "#1d4e89"
+MIN_N = 10
+SITUATIONS = ["Tous", "1er-2e down", "3e & court (≤3 yds)", "3e & long (≥7 yds)"]
+NON_WR = ["SCREEN", "RB CHECKDOWN", "RB WHEEL/ANGLE"]
 # separation bins (yards) -> color, tight (red) to wide open (green)
 SEP_BINS = [(0, 1.5, "#d7263d", "< 1,5 yd"), (1.5, 2.5, "#f46036", "1,5–2,5 yd"), (2.5, 3.5, "#f6c90e", "2,5–3,5 yd"),
             (3.5, 5, "#8bc34a", "3,5–5 yd"), (5, 99, "#1b998b", "> 5 yd")]
@@ -55,7 +59,7 @@ def sentence(team, top):
 
 
 # ---------- A. heatmap ----------
-def heatmap(tv):
+def heatmap(tv, situation="Tous"):
     order = tv.drop_duplicates("defensiveTeam").sort_values("overall", ascending=True).defensiveTeam.tolist()
     piv = lambda col: tv.pivot(index="defensiveTeam", columns="route", values=col).reindex(index=order, columns=ROUTES)
     z = piv("vuln").where(piv("show") == True)
@@ -63,8 +67,18 @@ def heatmap(tv):
     text = z.map(lambda v: "" if pd.isna(v) else f"{v:+.1f}")
     worst = order[-1]
     wtop = recommendation(worst, tv).iloc[0]
-    fig = go.Figure(go.Heatmap(
-        z=z.to_numpy(), x=[r.replace("RB ", "RB<br>").replace("/", "/<br>") for r in ROUTES], y=[f"{t} · {TEAMS.get(t, t)}" for t in order], customdata=custom,
+    xl = [r.replace("RB ", "RB<br>").replace("/", "/<br>") for r in ROUTES]
+    yl = [f"{t} · {TEAMS.get(t, t)}" for t in order]
+    nmat = piv("n")
+    few = nmat.where((nmat < MIN_N) & (nmat > 0))
+    fig = go.Figure(go.Heatmap(  # grey background for cells with too few routes
+        z=few.notna().where(few.notna()).astype(float).to_numpy(), x=xl, y=yl, customdata=nmat.to_numpy(),
+        text=few.map(lambda v: "" if pd.isna(v) else f"n={v:.0f}").to_numpy(), texttemplate="%{text}",
+        textfont=dict(size=9, color="#777"), colorscale=[[0, "#e3e3e3"], [1, "#e3e3e3"]], showscale=False,
+        xgap=2, ygap=2, hovertemplate="<b>%{y}</b> contre le <b>%{x}</b><br>Seulement %{customdata:.0f} tracés : "
+                                      "échantillon trop petit (< 10)<extra></extra>"))
+    fig.add_trace(go.Heatmap(
+        z=z.to_numpy(), x=xl, y=yl, customdata=custom,
         text=text.to_numpy(), texttemplate="%{text}", textfont=dict(size=10),
         colorscale=[[0, BLUE], [0.5, "#f7f7f7"], [1, RED]], zmid=0, zmin=-0.8, zmax=0.8,
         xgap=2, ygap=2,
@@ -76,7 +90,8 @@ def heatmap(tv):
                       "<br>Complétion : %{customdata[3]:.0%} · Yards/cible : %{customdata[4]:.1f}<extra></extra>",
     ))
     fig.update_layout(
-        title=dict(text=f"<b>Weak Spot Matrix — où chaque défense NFL laisse de l'espace</b><br>"
+        title=dict(text=f"<b>Weak Spot Matrix — où chaque défense NFL laisse de l'espace</b>"
+                        + ("" if situation == "Tous" else f" · <span style='color:{RED}'>{situation}</span>") + "<br>"
                         f"<sup>Rouge = le receveur est plus ouvert que contre la moyenne de la ligue au moment de la passe.<br>"
                         f"Défenses les plus perméables en haut. {worst} : {wtop.route} {fr(wtop.raw_delta)} yd vs la ligue.</sup>",
                    x=0.01, font=dict(size=20)),
@@ -85,7 +100,7 @@ def heatmap(tv):
         yaxis=dict(tickfont=dict(size=11), autorange=True),
         margin=dict(l=210, r=40, t=170, b=40),
     )
-    fig.add_annotation(text="Cellules vides : moins de 10 tracés. Score = écart de séparation vs ligue, rétréci vers 0 pour les petits échantillons (k=20). Semaines 1–8, 2021.",
+    fig.add_annotation(text="Cellules grises : moins de 10 tracés. Score = écart de séparation vs ligue, rétréci vers 0 pour les petits échantillons (k=20). Semaines 1–8, 2021.",
                        xref="paper", yref="paper", x=0, y=-0.035, showarrow=False, font=dict(size=11, color="#666"), xanchor="left")
     return fig, order
 
@@ -189,7 +204,7 @@ def scouting_card(tv, summ, routes, order):
 
 
 # ---------- C. man vs zone ----------
-def man_vs_zone(cov):
+def man_vs_zone(cov, situation="Tous"):
     p = cov.pivot(index="route", columns="pff_passCoverageType", values="sep").reindex(ROUTES)
     nn = cov.pivot(index="route", columns="pff_passCoverageType", values="n").reindex(ROUTES)
     wr = p.drop(["SCREEN", "RB CHECKDOWN", "RB WHEEL/ANGLE"])
@@ -203,11 +218,11 @@ def man_vs_zone(cov):
         fig.add_bar(x=order, y=p.loc[order, cv], name=f"vs {cv.lower() if cv == 'Zone' else 'man'}", marker_color=col,
                     text=[f"{v:.1f}".replace(".", ",") for v in p.loc[order, cv]], textposition="outside",
                     customdata=nn.loc[order, cv],
-                    hovertemplate="%{x} vs " + cv + " : %{y:.2f} yd (n=%{customdata})<extra></extra>")
+                    hovertemplate="%{x} vs " + cv + " : %{y:.2f} yd (n=%{customdata} tracés)<extra></extra>")
     fig.update_layout(
         title=dict(text=f"<b>La man coupe {(1 - keep.mean())*100:.0f} % de l'espace : contre elle, visez le {best_man} "
                         f"({dec(wr.Man.max())} yd) et le {second} ({dec(wr.Man[second])} yd), oubliez le {worst_man} ({dec(wr.Man.min())} yd)</b><br>"
-                        f"<sup>Séparation moyenne au moment de la passe selon la couverture (hors screens et tracés de RB). "
+                        f"<sup>{'' if situation == 'Tous' else situation + ' — '}Séparation moyenne au moment de la passe selon la couverture (hors screens et tracés de RB). "
                         f"Le {keep.idxmax()} est le tracé qui perd le moins d'espace face à la man (−{(1 - keep.max())*100:.0f} %).</sup>",
                    x=0.01, font=dict(size=19)),
         barmode="group", font=FONT, width=1150, height=560, plot_bgcolor="white", paper_bgcolor="white",
@@ -288,9 +303,90 @@ def play_animation(tv, summ, team):
     return fig, still
 
 
+def coach_panel_data(tv_all, cov_all, lg_all):
+    """Per situation x defense: the three routes to call, plus the coverage tendency of that defense."""
+    out = {}
+    for sit in SITUATIONS:
+        tv, cov = tv_all[tv_all.situation == sit], cov_all[cov_all.situation == sit]
+        p = cov.pivot(index="route", columns="pff_passCoverageType", values="sep").drop(NON_WR, errors="ignore")
+        nn = cov.pivot(index="route", columns="pff_passCoverageType", values="n")
+        best = {cv: dict(route=p[cv].idxmax(), sep=dec(p[cv].max()), n=int(nn.loc[p[cv].idxmax(), cv])) for cv in ("Man", "Zone")}
+        teams = {}
+        for team, d in tv.groupby("defensiveTeam"):
+            top = recommendation(team, tv)
+            teams[team] = dict(
+                sentence=sentence(team, top) if len(top) else "Pas assez de tracés dans cette situation.",
+                top=[dict(route=r.route, delta=fr(r.raw_delta), score=fr(r.vuln, 2), n=int(r.n), n_tgt=int(r.n_tgt),
+                          sep=dec(r.sep, 2), lg=dec(r.lg_sep, 2),
+                          comp=pct(r.comp) if r.n_tgt >= 5 else "–", ypt=dec(r.ypt) if r.n_tgt >= 5 else "–",
+                          open=bool(r.raw_delta >= 0.15)) for r in top.itertuples()],
+                man=None if pd.isna(d.man_rate.iloc[0]) else round(float(d.man_rate.iloc[0]) * 100),
+                n_plays=0 if pd.isna(d.n_plays.iloc[0]) else int(d.n_plays.iloc[0]))
+        conv = None
+        if sit.startswith("3e"):  # moving the chains matters more than raw space on 3rd down
+            lg = lg_all[(lg_all.situation == sit) & (lg_all.lg_n_tgt >= 30)]
+            opn = lg.loc[lg.drop(lg[lg.route.isin(NON_WR)].index).lg_sep.idxmax()]
+            conv = dict(best=[dict(route=r.route, conv=pct(r.lg_conv), n=int(r.lg_n_tgt))
+                              for r in lg.sort_values("lg_conv", ascending=False).head(2).itertuples()],
+                        open=dict(route=opn.route, sep=dec(opn.lg_sep), conv=pct(opn.lg_conv), n=int(opn.lg_n_tgt)))
+        out[sit] = dict(best=best, teams=teams, conv=conv)
+    return out
+
+
+PANEL_CSS = """
+.coach{background:#14213d;color:white;border-radius:12px;padding:20px 22px;margin:20px 0}
+.coach h2{margin:0 0 12px;font-size:22px}.ctrls{display:flex;flex-wrap:wrap;gap:16px;margin-bottom:16px}
+.ctrls label{font-size:12px;text-transform:uppercase;letter-spacing:.06em;opacity:.8;display:block;margin-bottom:4px}
+.ctrls select{font-size:16px;padding:8px 10px;border-radius:8px;border:0;min-width:260px;max-width:100%}
+.verdict{font-size:19px;line-height:1.45;margin:6px 0 16px}.plays{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.pl{background:rgba(255,255,255,.08);border-radius:10px;padding:12px 14px;border-left:5px solid #f6c90e}
+.pl.closed{border-left-color:#8a96a8}.pl .r{font-size:20px;font-weight:700}.pl .d{font-size:15px;margin:4px 0}
+.pl .m{font-size:13px;opacity:.8}.cov{margin-top:14px;font-size:15px;opacity:.95;line-height:1.5}
+.note{font-size:12px;opacity:.7;margin-top:10px}
+"""
+
+PANEL_JS = """
+const P = __PANEL__, HEAT = __HEAT__, MZ = __MZ__, CARD = __CARD__;
+const selT = document.getElementById('selTeam'), selS = document.getElementById('selSit');
+function render(){
+  const sit = selS.value, team = selT.value, d = P[sit].teams[team], b = P[sit].best;
+  document.getElementById('verdict').innerHTML = d ? d.sentence + '.' : 'Pas de données.';
+  document.getElementById('plays').innerHTML = (d ? d.top : []).map((r,i) =>
+    `<div class="pl ${r.open ? '' : 'closed'}"><div class="r">#${i+1} ${r.route}</div>
+     <div class="d"><b>${r.delta} yd</b> d'espace vs la ligue (${r.sep} vs ${r.lg})</div>
+     <div class="m">${r.n} tracés · ${r.n_tgt} ciblés · ${r.comp} complétion · ${r.ypt} yd/cible</div></div>`).join('');
+  let cov = '';
+  if (d && d.man !== null) {
+    const main = d.man >= 50 ? 'Man' : 'Zone', share = main === 'Man' ? d.man : 100 - d.man;
+    cov = `Dans cette situation, ${team} joue <b>${main === 'Man' ? 'en man' : 'en zone'} sur ${share} %</b> des jeux (n=${d.n_plays}). `
+        + `Ligue, même situation : contre la ${main === 'Man' ? 'man' : 'zone'}, le tracé (hors screens et RB) le plus ouvert est le `
+        + `<b>${b[main].route}</b> (${b[main].sep} yd, n=${b[main].n}).`;
+  }
+  const c = P[sit].conv;
+  if (c) cov += `<br>Pour <b>avancer les chaînes</b> (ligue, même situation) : `
+      + c.best.map(x => `<b>${x.route}</b> ${x.conv} de conversion (n=${x.n} ciblages)`).join(', ')
+      + (c.best.some(x => x.route === c.open.route)
+         ? `. Le ${c.open.route} est aussi le tracé le plus ouvert (${c.open.sep} yd) : l'espace et les chaînes vont ensemble.`
+         : `. Attention : le ${c.open.route} est le plus ouvert (${c.open.sep} yd) mais ne convertit que ${c.open.conv} (n=${c.open.n}).`);
+  document.getElementById('cov').innerHTML = cov;
+  Plotly.react('heat', HEAT[sit].data, HEAT[sit].layout);
+  Plotly.react('mz', MZ[sit].data, MZ[sit].layout);
+  Plotly.update('card', CARD[team][0], CARD[team][1]);
+}
+selT.onchange = selS.onchange = render;
+document.getElementById('heat').on('plotly_click', e => {
+  const t = String(e.points[0].y).split(' · ')[0];
+  if (CARD[t]) { selT.value = t; render(); document.querySelector('.coach').scrollIntoView({behavior:'smooth'}); }
+});
+render();
+"""
+
+
 def main():
-    tv = pd.read_csv(DATA / "team_route_vuln.csv")
-    cov = pd.read_csv(DATA / "coverage_route.csv")
+    tv_all = pd.read_csv(DATA / "team_route_vuln.csv")
+    cov_all = pd.read_csv(DATA / "coverage_route.csv")
+    lg_all = pd.read_csv(DATA / "league_route.csv")
+    tv, cov = tv_all[tv_all.situation == "Tous"], cov_all[cov_all.situation == "Tous"]
     summ = pd.read_parquet(DATA / "route_summary.parquet")
     routes = pd.read_parquet(DATA / "routes.parquet", columns=["gameId", "playId", "nflId", "frameId", "x_los", "y"])
     FIG.mkdir(exist_ok=True)
@@ -298,35 +394,60 @@ def main():
     fb, teams = scouting_card(tv, summ, routes, order)
     fc, mz = man_vs_zone(cov)
     fd, fd_still = play_animation(tv, summ, order[-1])
+    worst = order[-1]
+
+    # one interface: a coach panel (defense + situation) drives every chart
+    heat = {sit: json.loads(heatmap(tv_all[tv_all.situation == sit], sit)[0].to_json()) for sit in SITUATIONS}
+    mzs = {sit: json.loads(man_vs_zone(cov_all[cov_all.situation == sit], sit)[0].to_json()) for sit in SITUATIONS}
+    btns = fb.layout.updatemenus[0].buttons
+    card = {t: [b.args[0], {k: (v.to_plotly_json() if hasattr(v, "to_plotly_json") else v) for k, v in b.args[1].items()}]
+            for t, b in zip(teams, btns)}
+    for t in card:
+        card[t][1]["title"]["text"] = card[t][1]["title"]["text"].replace("</b><br>", " · toute la saison</b><br>", 1)
+    fb_html = go.Figure(fb)
+    fb_html.layout.updatemenus = ()
+    panel = coach_panel_data(tv_all, cov_all, lg_all)
+    team_opts = "".join(f"<option value='{t}'{' selected' if t == worst else ''}>{TEAMS.get(t, t)} ({t})</option>"
+                        for t in sorted(teams, key=lambda t: TEAMS.get(t, t)))
+    sit_opts = "".join(f"<option>{s}</option>" for s in SITUATIONS)
 
     head = ("<!doctype html><html><head><meta charset='utf-8'><title>Weak Spot</title>"
             "<meta name='viewport' content='width=device-width, initial-scale=1'>"
             "<style>body{font-family:Inter,Helvetica,Arial,sans-serif;background:#fafafa;color:#1f2430;margin:0}"
             ".wrap{max-width:1180px;margin:0 auto;padding:24px 16px}h1{font-size:34px;margin:8px 0}"
             ".lead{font-size:17px;line-height:1.5;max-width:900px}.card{background:white;border-radius:10px;"
-            "box-shadow:0 1px 4px rgba(0,0,0,.08);margin:24px 0;padding:8px;overflow-x:auto}</style></head><body><div class='wrap'>")
-    worst = order[-1]
-    wt = recommendation(worst, tv).iloc[0]
-    intro = (f"<h1>Weak Spot</h1><p class='lead'>Le scouting report des tracés les moins bien défendus. "
-             f"Pour chaque défense NFL (semaines 1–8, 2021, tracking Next Gen Stats), on classe chaque tracé de WR, TE et RB "
-             f"et on mesure l'espace entre le receveur et le défenseur le plus proche <b>au moment où le ballon part</b>. "
-             f"Exemple : {sentence(worst, recommendation(worst, tv))}.</p>")
-    body = [head, intro]
-    for i, f in enumerate([fa, fb, fc, fd]):
+            "box-shadow:0 1px 4px rgba(0,0,0,.08);margin:24px 0;padding:8px;overflow-x:auto}" + PANEL_CSS +
+            "</style></head><body><div class='wrap'>")
+    intro = ("<h1>Weak Spot</h1><p class='lead'>Le scouting report des tracés les moins bien défendus. "
+             "Pour chaque défense NFL (semaines 1–8, 2021, tracking Next Gen Stats), on classe chaque tracé de WR, TE et RB "
+             "et on mesure l'espace entre le receveur et le défenseur le plus proche <b>au moment où le ballon part</b>, "
+             "comparé à la moyenne de la ligue dans la même situation.</p>")
+    coach = (f"<div class='coach'><h2>Préparer l'attaque</h2><div class='ctrls'>"
+             f"<div><label for='selTeam'>Défense adverse</label><select id='selTeam'>{team_opts}</select></div>"
+             f"<div><label for='selSit'>Situation</label><select id='selSit'>{sit_opts}</select></div></div>"
+             f"<div class='verdict' id='verdict'></div><div class='plays' id='plays'></div><div class='cov' id='cov'></div>"
+             f"<div class='note'>Ces menus pilotent toute la page. Cliquez une ligne de la heatmap pour choisir une défense. "
+             f"Score = écart de séparation vs la ligue, rétréci vers 0 pour les petits échantillons (k=20). "
+             f"Les tracés avec moins de 10 occurrences sont exclus.</div></div>")
+    body = [head, intro, coach]
+    for i, (f, div) in enumerate([(fa, "heat"), (fb_html, "card"), (fc, "mz"), (fd, "play")]):
         body.append("<div class='card'>" + f.to_html(full_html=False, include_plotlyjs="inline" if i == 0 else False,
-                                                    config={"displaylogo": False}) + "</div>")
-    body.append("</div></body></html>")
+                                                    div_id=div, config={"displaylogo": False}) + "</div>")
+    js = (PANEL_JS.replace("__PANEL__", json.dumps(panel, ensure_ascii=False))
+          .replace("__HEAT__", json.dumps(heat)).replace("__MZ__", json.dumps(mzs)).replace("__CARD__", json.dumps(card)))
+    body.append(f"<script>{js}</script></div></body></html>")
     (ROOT / "weak_spot.html").write_text("\n".join(body), encoding="utf-8")
 
     fa.write_image(FIG / "weak_spot_matrix.png", scale=2)
     fc.write_image(FIG / "man_vs_zone.png", scale=2)
+    heatmap(tv_all[tv_all.situation == SITUATIONS[3]], SITUATIONS[3])[0].write_image(FIG / "weak_spot_matrix_3rd_long.png", scale=2)
     fd_still.write_image(FIG / "play_at_pass.png", scale=2)
     # static scouting card for the README: the most vulnerable defense
     fb_png = go.Figure(fb)
     idx = teams.index(worst)
-    fb_png.update_layout(updatemenus=[], **{k: v for k, v in fb.layout.updatemenus[0].buttons[idx].args[1].items()})
+    fb_png.update_layout(updatemenus=[], **{k: v for k, v in btns[idx].args[1].items()})
     for i, t in enumerate(fb_png.data):
-        t.visible = fb.layout.updatemenus[0].buttons[idx].args[0]["visible"][i]
+        t.visible = btns[idx].args[0]["visible"][i]
     fb_png.write_image(FIG / f"scouting_card_{worst}.png", scale=2)
     print("worst defense:", worst, "|", sentence(worst, recommendation(worst, tv)))
     print("man vs zone:", mz)
