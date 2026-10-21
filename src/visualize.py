@@ -27,6 +27,7 @@ SEP_BINS = [(0, 1.5, "#d7263d", "< 1,5 yd"), (1.5, 2.5, "#f46036", "1,5–2,5 yd
 
 
 def fr(x, d=1):
+    x = 0.0 if abs(x) < 0.05 else x
     return f"{x:+.{d}f}".replace(".", ",")
 
 
@@ -46,6 +47,9 @@ def recommendation(team, tv):
 def sentence(team, top):
     r = top.iloc[0]
     comp = f", {pct(r.comp)} de complétion sur {r.n_tgt} ciblages" if r.n_tgt >= 5 else ""
+    if r.raw_delta < 0.15:
+        return (f"{team} ne laisse aucun tracé ouvert : même son point le moins solide, le <b>{r.route}</b>, "
+                f"est au niveau de la ligue ({fr(r.raw_delta)} yd{comp}, n={r.n})")
     return (f"Contre {team}, attaquez avec le <b>{r.route}</b> : {fr(r.raw_delta)} yd de séparation vs la ligue"
             f"{comp} (n={r.n} tracés)")
 
@@ -130,7 +134,7 @@ def scouting_card(tv, summ, routes, order):
                 g = rk.loc[tuple(k)]
                 xs += g.y.tolist() + [None]; ys += g.x_los.tolist() + [None]
             traces.append(go.Scatter(x=xs, y=ys, mode="lines", line=dict(color=col, width=1.2), opacity=0.3,
-                                     name=lab, legendgroup=lab, showlegend=(team == teams[0]), hoverinfo="skip"))
+                                     showlegend=False, hoverinfo="skip"))
         for rank, r in enumerate(top.itertuples(), 1):
             s = smp[smp.route == r.route]
             for lo, hi_, col, lab in SEP_BINS:
@@ -160,15 +164,18 @@ def scouting_card(tv, summ, routes, order):
                        x=0.01, font=dict(size=20)),
             annotations=base_ann + [dict(text=side, xref="paper", yref="paper", x=0, y=-0.08, showarrow=False,
                                          align="left", xanchor="left", yanchor="top", font=dict(size=13))]))
+    for lo, hi_, col, lab in SEP_BINS:  # legend entries, always visible
+        traces.append(go.Scatter(x=[None], y=[None], mode="lines", line=dict(color=col, width=4), name=lab))
     fig = go.Figure(traces)
     n = len(traces)
+    n_leg = len(SEP_BINS)
     buttons = []
     for team, (a, b), lay in zip(teams, vis_groups, layouts):
-        vis = [a <= i < b for i in range(n)]
+        vis = [a <= i < b or i >= n - n_leg for i in range(n)]
         buttons.append(dict(label=f"{team} · {TEAMS.get(team, team)}", method="update", args=[{"visible": vis}, lay]))
     a, b = vis_groups[0]
     for i, t in enumerate(fig.data):
-        t.visible = a <= i < b
+        t.visible = a <= i < b or i >= n - n_leg
     fig.update_layout(**layouts[0], shapes=shapes, font=FONT, width=1150, height=980,
                       plot_bgcolor="white", paper_bgcolor="white",
                       xaxis=dict(range=[-1, 62], showgrid=False, zeroline=False, showticklabels=False, fixedrange=True),
