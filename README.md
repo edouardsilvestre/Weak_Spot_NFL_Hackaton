@@ -2,7 +2,7 @@
 
 > ### Down. Distance. Personnel. Trois choix, un appel.
 
-**Point Faible transforme les données de tracking de votre adversaire en votre prochain appel de jeu.**
+**Weak Spot transforme les données de tracking de votre adversaire en votre prochain appel de jeu.**
 
 Réglez le moment du match (down, distance, personnel), et Point Faible vous donne la réponse des deux côtés du ballon :
 
