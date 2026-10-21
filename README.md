@@ -17,7 +17,9 @@ L'outil fonctionne des deux côtés du ballon parce qu'il étudie une seule chos
 
 ## Vidéo
 
-[**Regarder la présentation video**](videos/weak_spot_30s.mp4)
+![Présentation Weak Spot (30 s)](videos/weak_spot_30s.gif)
+
+[Version MP4 en haute définition](videos/weak_spot_30s.mp4)
 
 ## Aperçu
 
