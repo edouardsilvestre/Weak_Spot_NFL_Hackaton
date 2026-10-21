@@ -4,3 +4,4 @@ pyarrow
 plotly
 kaleido
 matplotlib
+pillow

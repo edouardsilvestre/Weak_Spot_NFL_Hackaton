@@ -2,6 +2,8 @@
 
 **Weak Spot – Coach Mode** est un outil d'appel en direct pour la tablette de la touche, construit sur le tracking Next Gen Stats (semaines 1 à 8 de 2021). Le coach choisit l'adversaire, le down, la distance et le personnel. En mode **ATTAQUE**, il obtient les 3 tracés à appeler, la tendance man/zone de la défense et l'arbre des tracés réels. En mode **DÉFENSE**, il obtient les couvertures qui concèdent le moins face aux tracés que cette attaque cible. Chaque estimation est rétrécie hiérarchiquement (équipe × situation → équipe → ligue × situation → ligue, k=15) et porte un badge de confiance avec son n. Nous classons au **taux de succès** plutôt qu'à la séparation seule, car les deux divergent : le SLANT est le tracé le moins séparé de la ligue (2,6 yd au moment de la passe) mais le plus efficace, avec **59 % de succès (n=783 ciblages) contre 48 % pour le GO (n=1 028)**.
 
+🎥 **[Vidéo de présentation (84 s)](videos/weak_spot_coach_demo.mp4)**. Elle est régénérable avec `python src/make_video.py` (Chrome et ffmpeg requis).
+
 **▶ Ouvrir `coach.html`** (fichier autonome, sans serveur : téléchargez-le puis ouvrez-le dans un navigateur).
 
 | Mode ATTAQUE (3e & long vs PHI) | Mode DÉFENSE (3e & court vs KC) |
