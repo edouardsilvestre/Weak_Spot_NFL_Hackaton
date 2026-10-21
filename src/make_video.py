@@ -1,5 +1,5 @@
-"""30-second motion-design teaser rendered frame by frame (PIL) and encoded with ffmpeg.
-Route shapes are the real median trajectories per route class. Output: videos/weak_spot_30s.mp4"""
+"""38-second motion-design teaser rendered frame by frame (PIL) and encoded with ffmpeg.
+Route shapes are the real median trajectories per route class. Output: videos/weak_spot.mp4"""
 import math
 import subprocess
 from pathlib import Path
@@ -9,8 +9,8 @@ import pandas as pd
 from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT = ROOT / "videos" / "weak_spot_30s.mp4"
-W, H, FPS, DUR = 1920, 1080, 30, 30
+OUT = ROOT / "videos" / "weak_spot.mp4"
+W, H, FPS, DUR = 1920, 1080, 30, 38
 BG, ACC, TXT, MUT, FIELD = (11, 19, 32), (246, 201, 14), (238, 242, 248), (120, 136, 162), (47, 107, 58)
 FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 _fonts = {}
@@ -165,18 +165,82 @@ def s_outro(d, t):
     text(d, (W / 2, 800), "coach.html  ·  NFL Big Data Bowl  ·  Next Gen Stats", 36, MUT, "mm", alpha=ease((t - 1.9) / 0.5))
 
 
-SCENES = [(0, 3.5, s_title), (3.5, 9.6, s_choices), (9.6, 12.2, s_call), (12.2, 19.6, s_field), (19.6, 25.0, s_bars), (25.0, 30.0, s_outro)]
+# ---------------- the real interface, attack then defense ----------------
+FX, FY, FW, FH = 790, 210, 1040, 790      # tablet frame holding the app screenshots
 
 
-def frame(tsec, tm):
+def load_ui():
+    out = {}
+    mask = Image.new("L", (FW, FH), 0)
+    ImageDraw.Draw(mask).rounded_rectangle([0, 0, FW - 1, FH - 1], 26, fill=255)
+    for k in ("att", "def"):
+        im = Image.open(ROOT / "figures" / f"coach_{k}.png").convert("RGB")
+        out[k] = im.resize((FW, int(im.height * FW / im.width)), Image.LANCZOS)
+    out["mask"] = mask
+    return out
+
+
+def toggle(d, pos):
+    """ATTAQUE | DÉFENSE pill; pos 0 = attack lit, 1 = defense lit."""
+    x0, y0, w, h = W / 2 - 300, 60, 600, 96
+    d.rounded_rectangle([x0, y0, x0 + w, y0 + h], 48, fill=(27, 41, 68))
+    hx = x0 + 8 + pos * (w / 2 - 8)
+    d.rounded_rectangle([hx, y0 + 8, hx + w / 2 - 8, y0 + h - 8], 40, fill=ACC)
+    for i, lab in enumerate(("ATTAQUE", "DÉFENSE")):
+        lit = 1 - abs(pos - i)
+        text(d, (x0 + w / 4 + i * w / 2, y0 + h / 2), lab, 40, mix(MUT, BG, lit), "mm", bg=(27, 41, 68))
+
+
+def s_ui(img, d, t, ui, mode):
+    att = mode == "att"
+    toggle(d, 0 if att else ease((t - 0.2) / 0.5))
+    a = ease((t - (0.1 if att else 0.6)) / 0.5)
+    lines = ("Quels tracés", "appeler ?") if att else ("Quelle", "couverture ?")
+    sub = ("contre cette défense," if att else "contre cette attaque,", "dans cette situation.")
+    text(d, (110 - (1 - a) * 80, 330), lines[0], 92, TXT, alpha=a)
+    text(d, (110 - (1 - a) * 80, 440), lines[1], 92, ACC, alpha=a)
+    b = ease((t - (0.5 if att else 1.0)) / 0.5)
+    text(d, (110, 600), sub[0], 40, MUT, alpha=b)
+    text(d, (110, 655), sub[1], 40, MUT, alpha=b)
+    # screenshot slides in, then scrolls down to the recommendation cards
+    c = ease((t - (0.2 if att else 0.4)) / 0.6)
+    shot = ui[mode]
+    y1 = min(shot.height - FH, 270 if att else 230)
+    sy = int(y1 * ease_io((t - 2.0) / 2.2))
+    crop = shot.crop((0, sy, FW, sy + FH))
+    x = int(FX + (1 - c) * 400)
+    d.rounded_rectangle([x - 14, FY - 14, x + FW + 14, FY + FH + 14], 38, fill=(40, 52, 78))
+    img.paste(crop, (x, FY), ui["mask"])
+
+
+def s_ui_att(img, d, t, ui):
+    s_ui(img, d, t, ui, "att")
+
+
+def s_ui_def(img, d, t, ui):
+    s_ui(img, d, t, ui, "def")
+
+
+SCENES = [(0, 3.5, s_title), (3.5, 9.6, s_choices), (9.6, 12.2, s_call), (12.2, 18.0, s_field), (18.0, 24.0, s_ui_att),
+          (24.0, 30.0, s_ui_def), (30.0, 34.5, s_bars), (34.5, 38.0, s_outro)]
+
+
+def frame(tsec, tm, ui):
     img = Image.new("RGB", (W, H), BG)
     d = ImageDraw.Draw(img)
     for t0, t1, scene in SCENES:
         if t0 <= tsec < t1:
             t = tsec - t0
-            scene(d, t, tm) if scene is s_field else scene(d, t)
+            if scene is s_field:
+                scene(d, t, tm)
+            elif scene in (s_ui_att, s_ui_def):
+                scene(img, d, t, ui)
+            else:
+                scene(d, t)
             # quick fades at scene edges (the yellow wipe is its own entrance)
-            edge = min((t1 - tsec) / 0.18, 1.0 if scene is s_call else t / 0.18, 1.0)
+            fade_in = scene not in (s_call, s_ui_def)    # wipe / mode switch are their own transitions
+            fade_out = scene is not s_ui_att
+            edge = min((t1 - tsec) / 0.18 if fade_out else 1.0, t / 0.18 if fade_in else 1.0, 1.0)
             if tsec >= DUR - 0.6:
                 edge = min(edge, (DUR - tsec) / 0.6)
             if edge < 1:
@@ -188,12 +252,12 @@ def frame(tsec, tm):
 
 def main():
     OUT.parent.mkdir(exist_ok=True)
-    tm = templates()
+    tm, ui = templates(), load_ui()
     ff = subprocess.Popen(["ffmpeg", "-y", "-v", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}", "-r", str(FPS),
                            "-i", "-", "-c:v", "libx264", "-preset", "medium", "-crf", "20", "-pix_fmt", "yuv420p",
                            "-movflags", "+faststart", str(OUT)], stdin=subprocess.PIPE)
     for i in range(DUR * FPS):
-        ff.stdin.write(frame(i / FPS, tm).tobytes())
+        ff.stdin.write(frame(i / FPS, tm, ui).tobytes())
     ff.stdin.close()
     ff.wait()
     print(OUT, f"{OUT.stat().st_size / 1e6:.1f} MB")
